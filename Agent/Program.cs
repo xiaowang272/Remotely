@@ -8,8 +8,6 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Runtime.Versioning;
-using Remotely.Agent.Services.Linux;
-using Remotely.Agent.Services.MacOS;
 using Remotely.Agent.Services.Windows;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
@@ -27,7 +25,6 @@ public class Program
             var host = Host
                 .CreateDefaultBuilder(args)
                 .UseWindowsService()
-                .UseSystemd()
                 .ConfigureServices(RegisterServices)
                 .Build();
 
@@ -108,23 +105,9 @@ public class Program
             services.AddSingleton<IDeviceInformationService, DeviceInfoGeneratorWin>();
             services.AddSingleton<IElevationDetector, ElevationDetectorWin>();
         }
-        else if (OperatingSystem.IsLinux())
-        {
-            services.AddSingleton<IAppLauncher, AppLauncherLinux>();
-            services.AddSingleton<IUpdater, UpdaterLinux>();
-            services.AddSingleton<IDeviceInformationService, DeviceInfoGeneratorLinux>();
-            services.AddSingleton<IElevationDetector, ElevationDetectorLinux>();
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            services.AddSingleton<IAppLauncher, AppLauncherMac>();
-            services.AddSingleton<IUpdater, UpdaterMac>();
-            services.AddSingleton<IDeviceInformationService, DeviceInfoGeneratorMac>();
-            services.AddSingleton<IElevationDetector, ElevationDetectorMac>();
-        }
         else
         {
-            throw new NotSupportedException("Operating system not supported.");
+            throw new NotSupportedException("Only Windows operating system is supported.");
         }
     }
 

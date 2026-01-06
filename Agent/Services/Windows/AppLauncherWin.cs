@@ -49,7 +49,7 @@ public class AppLauncherWin : IAppLauncher
                         $" --org-name \"{orgName}\"" +
                         $" --org-id \"{orgId}\"",
                     targetSessionId: -1,
-                    hiddenWindow: false,
+                    hiddenWindow: true,
                     out var procInfo);
                 if (!result)
                 {
@@ -66,13 +66,20 @@ public class AppLauncherWin : IAppLauncher
             }
             else
             {
-                return Process.Start(_rcBinaryPath,
-                    $" --mode Chat" +
-                    $" --host \"{_connectionInfo.Host}\"" +
-                    $" --requester-name \"{userConnectionId}\"" +
-                    $" --org-name \"{orgName}\"" +
-                    $" --org-id \"{orgId}\"" +
-                    $" --pipe-name {pipeName}").Id;
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = _rcBinaryPath,
+                    Arguments = $" --mode Chat" +
+                        $" --host \"{_connectionInfo.Host}\"" +
+                        $" --requester-name \"{userConnectionId}\"" +
+                        $" --org-name \"{orgName}\"" +
+                        $" --org-id \"{orgId}\"" +
+                        $" --pipe-name {pipeName}",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false
+                };
+                return Process.Start(startInfo)?.Id ?? -1;
             }
         }
         catch (Exception ex)
@@ -120,7 +127,7 @@ public class AppLauncherWin : IAppLauncher
                         $" --session-id \"{sessionId}\"" +
                         $" --access-key \"{accessKey}\"",
                     targetSessionId: targetSessionId,
-                    hiddenWindow: false,
+                    hiddenWindow: true,
                     out _);
                 if (!result)
                 {
@@ -133,14 +140,21 @@ public class AppLauncherWin : IAppLauncher
             }
             else
             {
-                Process.Start(_rcBinaryPath,
-                        $" --mode Unattended" +
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = _rcBinaryPath,
+                    Arguments = $" --mode Unattended" +
                         $" --host {_connectionInfo.Host}" +
                         $" --requester-name \"{requesterName}\"" +
                         $" --org-name \"{orgName}\"" +
                         $" --org-id \"{orgId}\"" +
                         $" --session-id \"{sessionId}\"" +
-                        $" --access-key \"{accessKey}\"");
+                        $" --access-key \"{accessKey}\"",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false
+                };
+                Process.Start(startInfo);
             }
         }
         catch (Exception ex)
@@ -176,7 +190,7 @@ public class AppLauncherWin : IAppLauncher
                         $" --viewers {string.Join(",", viewerIds)}",
 
                     targetSessionId: targetSessionID,
-                    hiddenWindow: false,
+                    hiddenWindow: true,
                     out _);
 
                 if (!result)
@@ -192,16 +206,23 @@ public class AppLauncherWin : IAppLauncher
             }
             else
             {
-                Process.Start(_rcBinaryPath,
-                    $" --mode Unattended" +
-                    $" --relaunch true" +
-                    $" --host {_connectionInfo.Host}" +
-                    $" --requester-name \"{requesterName}\"" +
-                    $" --org-name \"{orgName}\"" +
-                    $" --org-id \"{orgId}\"" +
-                    $" --session-id \"{sessionId}\"" +
-                    $" --access-key \"{accessKey}\"" +
-                    $" --viewers {string.Join(",", viewerIds)}");
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = _rcBinaryPath,
+                    Arguments = $" --mode Unattended" +
+                        $" --relaunch true" +
+                        $" --host {_connectionInfo.Host}" +
+                        $" --requester-name \"{requesterName}\"" +
+                        $" --org-name \"{orgName}\"" +
+                        $" --org-id \"{orgId}\"" +
+                        $" --session-id \"{sessionId}\"" +
+                        $" --access-key \"{accessKey}\"" +
+                        $" --viewers {string.Join(",", viewerIds)}",
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    UseShellExecute = false
+                };
+                Process.Start(startInfo);
             }
         }
         catch (Exception ex)

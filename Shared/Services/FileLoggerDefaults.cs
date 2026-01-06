@@ -12,25 +12,13 @@ public static class FileLoggerDefaults
         {
             if (OperatingSystem.IsWindows())
             {
-                var logsPath = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                    "Remotely",
-                    "Logs");
+                var logsPath = @"C:\Windows\Logs";
 
                 if (EnvironmentHelper.IsDebug)
                 {
                     logsPath += "_Debug";
                 }
                 return logsPath;
-            }
-
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-            {
-                if (EnvironmentHelper.IsDebug)
-                {
-                    return "/var/log/remotely_debug";
-                }
-                return "/var/log/remotely";
             }
 
             throw new PlatformNotSupportedException();

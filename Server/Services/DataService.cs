@@ -150,6 +150,8 @@ public interface IDataService
 
     Task<List<SavedScript>> GetSavedScriptsWithoutContent(string userId, string organizationId);
 
+    Task<List<SavedScript>> GetSavedScriptsForOrganization(string organizationId, string? userId = null);
+
     Task<Result<ScriptResult>> GetScriptResult(string resultId);
 
     Task<Result<ScriptResult>> GetScriptResult(string resultId, string orgId);
@@ -213,6 +215,16 @@ public interface IDataService
 
     Task<Result> UpdateUserOptions(string userName, RemotelyUserOptions options);
     Task<bool> ValidateApiKey(string keyId, string apiSecret, string requestPath, string remoteIP);
+
+    // Script Schedule methods
+    Task<Result<ScriptSchedule>> GetScriptSchedule(int scheduleId, string organizationId);
+
+    // Script Run methods
+    Task<PagedResultDto<ScriptRunDto>> GetScriptRuns(string organizationId, ScriptRunFilterDto filter);
+    Task<Result<ScriptRunDetailDto>> GetScriptRun(int runId, string organizationId);
+    Task<Result> DeleteScriptRun(int runId, string organizationId);
+    Task<int> DeleteScriptRuns(List<int> runIds, string organizationId);
+    Task<int> ClearAllScriptRuns(string organizationId);
 }
 
 public class DataService : IDataService
@@ -287,14 +299,17 @@ public class DataService : IDataService
             return Result.Fail<DeviceGroup>("Device group already exists.");
         }
 
-        dbContext.Attach(deviceGroup);
-        deviceGroup.Organization = organization;
-        deviceGroup.OrganizationID = orgId;
+        // 创建新的 DeviceGroup 对象，确保 ID 由数据库生成
+        var newDeviceGroup = new DeviceGroup
+        {
+            Name = deviceGroup.Name,
+            Organization = organization,
+            OrganizationID = orgId
+        };
 
-        organization.DeviceGroups ??= new List<DeviceGroup>();
-        organization.DeviceGroups.Add(deviceGroup);
+        dbContext.DeviceGroups.Add(newDeviceGroup);
         await dbContext.SaveChangesAsync();
-        return Result.Ok(deviceGroup);
+        return Result.Ok(newDeviceGroup);
     }
 
     public async Task<Result> AddDeviceToGroup(string deviceId, string groupId)
@@ -1663,6 +1678,31 @@ public class DataService : IDataService
             .ToListAsync();
     }
 
+    public async Task<List<SavedScript>> GetSavedScriptsForOrganization(string organizationId, string? userId = null)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        return await dbContext.SavedScripts
+            .AsNoTracking()
+            .Include(x => x.Creator)
+            .Where(x => x.OrganizationID == organizationId && 
+                       (x.IsPublic || (userId != null && x.CreatorId == userId)))
+            .Select(x => new SavedScript()
+            {
+                Creator = x.Creator,
+                CreatorId = x.CreatorId,
+                FolderPath = x.FolderPath,
+                Id = x.Id,
+                IsPublic = x.IsPublic,
+                IsQuickScript = x.IsQuickScript,
+                Name = x.Name,
+                OrganizationID = x.OrganizationID,
+                Shell = x.Shell
+                // Note: Content field is intentionally excluded
+            })
+            .ToListAsync();
+    }
+
     public async Task<Result<ScriptResult>> GetScriptResult(string resultId, string orgId)
     {
         using var dbContext = _appDbFactory.GetContext();
@@ -2315,5 +2355,211 @@ public class DataService : IDataService
             )
             .Select(x => x.Id)
             .ToArray();
+    }
+
+    public async Task<Result<ScriptSchedule>> GetScriptSchedule(int scheduleId, string organizationId)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        var schedule = await dbContext.ScriptSchedules
+            .AsNoTracking()
+            .Include(x => x.Creator)
+            .Include(x => x.Devices)
+            .Include(x => x.DeviceGroups)
+            .FirstOrDefaultAsync(x => x.Id == scheduleId && x.OrganizationID == organizationId);
+
+        if (schedule is null)
+        {
+            return Result.Fail<ScriptSchedule>("Script schedule not found.");
+        }
+
+        return Result.Ok(schedule);
+    }
+
+    public async Task<PagedResultDto<ScriptRunDto>> GetScriptRuns(string organizationId, ScriptRunFilterDto filter)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        var query = dbContext.ScriptRuns
+            .AsNoTracking()
+            .Include(x => x.SavedScript)
+            .Include(x => x.Devices)
+            .Include(x => x.Results)
+            .Where(x => x.OrganizationID == organizationId);
+
+        // Apply filters
+        if (filter.SavedScriptId.HasValue)
+        {
+            query = query.Where(x => x.SavedScriptId == filter.SavedScriptId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.DeviceId))
+        {
+            query = query.Where(x => x.Devices != null && x.Devices.Any(d => d.ID == filter.DeviceId));
+        }
+
+        if (filter.StartDate.HasValue)
+        {
+            query = query.Where(x => x.RunAt >= filter.StartDate.Value);
+        }
+
+        if (filter.EndDate.HasValue)
+        {
+            query = query.Where(x => x.RunAt <= filter.EndDate.Value);
+        }
+
+        // Get total count before pagination
+        var totalCount = await query.CountAsync();
+
+        // Apply ordering and pagination
+        var items = await query
+            .OrderByDescending(x => x.RunAt)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .Select(x => new ScriptRunDto
+            {
+                Id = x.Id,
+                RunAt = x.RunAt,
+                Initiator = x.Initiator,
+                InputType = x.InputType,
+                SavedScriptId = x.SavedScriptId,
+                SavedScriptName = x.SavedScript != null ? x.SavedScript.Name : null,
+                DeviceCount = x.Devices != null ? x.Devices.Count : 0,
+                SuccessCount = x.Results != null ? x.Results.Count(r => !r.HadErrors) : 0,
+                FailureCount = x.Results != null ? x.Results.Count(r => r.HadErrors) : 0
+            })
+            .ToListAsync();
+
+        return new PagedResultDto<ScriptRunDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = filter.Page,
+            PageSize = filter.PageSize
+        };
+    }
+
+    public async Task<Result<ScriptRunDetailDto>> GetScriptRun(int runId, string organizationId)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        var run = await dbContext.ScriptRuns
+            .AsNoTracking()
+            .Include(x => x.SavedScript)
+            .Include(x => x.Devices)
+            .Include(x => x.Results!)
+            .ThenInclude(r => r.Device)
+            .FirstOrDefaultAsync(x => x.Id == runId && x.OrganizationID == organizationId);
+
+        if (run is null)
+        {
+            return Result.Fail<ScriptRunDetailDto>("Script run not found.");
+        }
+
+        var dto = new ScriptRunDetailDto
+        {
+            Id = run.Id,
+            RunAt = run.RunAt,
+            Initiator = run.Initiator,
+            InputType = run.InputType,
+            SavedScriptId = run.SavedScriptId,
+            SavedScriptName = run.SavedScript?.Name,
+            DeviceCount = run.Devices?.Count ?? 0,
+            SuccessCount = run.Results?.Count(r => !r.HadErrors) ?? 0,
+            FailureCount = run.Results?.Count(r => r.HadErrors) ?? 0,
+            Results = run.Results?.Select(r => new ScriptRunResultDto
+            {
+                Id = r.ID,
+                DeviceId = r.DeviceID,
+                DeviceName = r.Device?.DeviceName,
+                HadErrors = r.HadErrors,
+                StandardOutput = r.StandardOutput,
+                ErrorOutput = r.ErrorOutput,
+                RunTime = r.RunTime,
+                TimeStamp = r.TimeStamp
+            }).ToList() ?? new List<ScriptRunResultDto>()
+        };
+
+        return Result.Ok(dto);
+    }
+
+    public async Task<Result> DeleteScriptRun(int runId, string organizationId)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        var run = await dbContext.ScriptRuns
+            .Include(x => x.Results)
+            .FirstOrDefaultAsync(x => x.Id == runId && x.OrganizationID == organizationId);
+
+        if (run is null)
+        {
+            return Result.Fail("Script run not found.");
+        }
+
+        // 删除关联的脚本结果
+        if (run.Results != null && run.Results.Any())
+        {
+            dbContext.ScriptResults.RemoveRange(run.Results);
+        }
+
+        // 删除脚本运行记录
+        dbContext.ScriptRuns.Remove(run);
+        await dbContext.SaveChangesAsync();
+
+        return Result.Ok();
+    }
+
+    public async Task<int> DeleteScriptRuns(List<int> runIds, string organizationId)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        var runs = await dbContext.ScriptRuns
+            .Include(x => x.Results)
+            .Where(x => runIds.Contains(x.Id) && x.OrganizationID == organizationId)
+            .ToListAsync();
+
+        if (!runs.Any())
+        {
+            return 0;
+        }
+
+        // 删除关联的脚本结果
+        var allResults = runs.SelectMany(r => r.Results ?? Enumerable.Empty<Remotely.Shared.Entities.ScriptResult>()).ToList();
+        if (allResults.Any())
+        {
+            dbContext.ScriptResults.RemoveRange(allResults);
+        }
+
+        // 删除脚本运行记录
+        dbContext.ScriptRuns.RemoveRange(runs);
+        await dbContext.SaveChangesAsync();
+
+        return runs.Count;
+    }
+
+    public async Task<int> ClearAllScriptRuns(string organizationId)
+    {
+        using var dbContext = _appDbFactory.GetContext();
+
+        // 先删除所有关联的脚本结果
+        var resultIds = await dbContext.ScriptRuns
+            .Where(x => x.OrganizationID == organizationId)
+            .SelectMany(x => x.Results!)
+            .Select(r => r.ID)
+            .ToListAsync();
+
+        if (resultIds.Any())
+        {
+            await dbContext.ScriptResults
+                .Where(r => resultIds.Contains(r.ID))
+                .ExecuteDeleteAsync();
+        }
+
+        // 删除所有脚本运行记录
+        var deletedCount = await dbContext.ScriptRuns
+            .Where(x => x.OrganizationID == organizationId)
+            .ExecuteDeleteAsync();
+
+        return deletedCount;
     }
 }

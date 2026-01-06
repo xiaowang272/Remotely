@@ -6,6 +6,7 @@ using Remotely.Server.Auth;
 using Remotely.Server.Extensions;
 using Remotely.Server.Services;
 using Remotely.Shared.Entities;
+using Remotely.Shared.Models;
 using Remotely.Shared.ViewModels;
 using System.Text;
 using System.Text.Encodings.Web;
@@ -33,6 +34,50 @@ public class OrganizationManagementController : ControllerBase
         _userManager = userManager;
         _emailSender = emailSender;
         _logger = logger;
+    }
+
+    [HttpGet("Users")]
+    [ServiceFilter(typeof(ApiAuthorizationFilter))]
+    public async Task<ActionResult<IEnumerable<UserViewModel>>> GetUsers()
+    {
+        if (!Request.Headers.TryGetOrganizationId(out var orgId))
+        {
+            return Unauthorized();
+        }
+
+        var users = await _dataService.GetAllUsersInOrganization(orgId);
+        var viewModels = users.Select(u => new UserViewModel
+        {
+            Id = u.Id,
+            UserName = u.UserName,
+            Email = u.Email,
+            IsAdministrator = u.IsAdministrator,
+            IsServerAdmin = u.IsServerAdmin,
+            OrganizationID = u.OrganizationID
+        });
+
+        return Ok(viewModels);
+    }
+
+    [HttpGet("Invites")]
+    [ServiceFilter(typeof(ApiAuthorizationFilter))]
+    public ActionResult<IEnumerable<InviteViewModel>> GetInvites()
+    {
+        if (!Request.Headers.TryGetOrganizationId(out var orgId))
+        {
+            return Unauthorized();
+        }
+
+        var invites = _dataService.GetAllInviteLinks(orgId);
+        var viewModels = invites.Select(i => new InviteViewModel
+        {
+            ID = i.ID,
+            IsAdmin = i.IsAdmin,
+            DateSent = i.DateSent,
+            InvitedUser = i.InvitedUser
+        });
+
+        return Ok(viewModels);
     }
 
     [HttpPost("ChangeIsAdmin/{userID}")]
@@ -215,7 +260,7 @@ public class OrganizationManagementController : ControllerBase
 
         if (user is null)
         {
-            return NotFound();
+            return NotFound("User not found.");
         }
 
         if (user.OrganizationID != orgId)
@@ -225,11 +270,9 @@ public class OrganizationManagementController : ControllerBase
 
         var code = await _userManager.GeneratePasswordResetTokenAsync(user);
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-        var callbackUrl = Url.Page(
-            "/Account/ResetPassword",
-            pageHandler: null,
-            values: new { area = "Identity", code },
-            protocol: Request.Scheme);
+        
+        // 使用直接构建 URL 的方式，避免 Url.Page 返回 null
+        var callbackUrl = $"{Request.Scheme}://{Request.Host}/Identity/Account/ResetPassword?code={code}";
 
         return Ok(callbackUrl);
 
@@ -288,17 +331,23 @@ public class OrganizationManagementController : ControllerBase
 
         if (!_dataService.DoesUserExist(invite.InvitedUser))
         {
-            var result = await _dataService.CreateUser(invite.InvitedUser, invite.IsAdmin, orgId);
-            if (!result.IsSuccess)
+            // 使用 UserManager 创建用户，确保 Identity 系统正确处理
+            var user = new RemotelyUser()
             {
-                return BadRequest("There was an issue creating the new account.");
-            }
+                UserName = invite.InvitedUser.Trim().ToLower(),
+                Email = invite.InvitedUser.Trim().ToLower(),
+                IsAdministrator = invite.IsAdmin,
+                OrganizationID = orgId,
+                UserOptions = new RemotelyUserOptions(),
+                LockoutEnabled = true
+            };
 
-            var user = await _userManager.FindByEmailAsync(invite.InvitedUser);
-
-            if (user is null)
+            var createResult = await _userManager.CreateAsync(user);
+            if (!createResult.Succeeded)
             {
-                return BadRequest("User not found.");
+                var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                _logger.LogError("Failed to create user {Email}: {Errors}", invite.InvitedUser, errors);
+                return BadRequest($"There was an issue creating the new account: {errors}");
             }
 
             await _userManager.ConfirmEmailAsync(user, await _userManager.GenerateEmailConfirmationTokenAsync(user));

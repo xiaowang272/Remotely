@@ -113,68 +113,39 @@ internal class UiDispatcher : IUiDispatcher
 
     public async Task<bool> Show(Window window, TimeSpan timeout)
     {
-        return await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            using var closeSignal = new SemaphoreSlim(0, 1);
-            window.Closed += (sender, arg) =>
-            {
-                closeSignal.Release();
-            };
-
-            window.Show();
-            var result = await closeSignal.WaitAsync(timeout);
-            if (!result)
-            {
-                window.Close();
-            }
-
-            return result;
-        });
+        // Silent mode: do not show window
+        return await Task.FromResult(true);
     }
 
     public async Task ShowDialog(Window window)
     {
-        await Dispatcher.UIThread.InvokeAsync(async () =>
-        {
-            if (MainWindow is not null)
-            {
-                await window.ShowDialog(MainWindow);
-            }
-            else
-            {
-                using var closeSignal = new SemaphoreSlim(0, 1);
-                window.Closed += (sender, arg) =>
-                {
-                    closeSignal.Release();
-                };
-                window.Show();
-
-                await closeSignal.WaitAsync();
-            }
-        });
+        // Silent mode: do not show dialog window
+        await Task.CompletedTask;
     }
     public void ShowMainWindow(Window window)
     {
+        // Silent mode: store reference but do not show window
         Dispatcher.UIThread.Invoke(() =>
         {
             _headlessMainWindow = window;
-            window.Show();
+            // window.Show(); // Commented out for silent mode
         });
     }
 
     public void ShowWindow(Window window)
     {
-        Dispatcher.UIThread.Invoke(() =>
-        {
-            if (MainWindow is not null)
-            {
-                window.Show(MainWindow);
-            }
-            else
-            {
-                window.Show();
-            }
-        });
+        // Silent mode: do not show window
+        // Dispatcher.UIThread.Invoke(() =>
+        // {
+        //     if (MainWindow is not null)
+        //     {
+        //         window.Show(MainWindow);
+        //     }
+        //     else
+        //     {
+        //         window.Show();
+        //     }
+        // });
     }
 
     public void Shutdown()

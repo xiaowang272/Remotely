@@ -1,6 +1,4 @@
 using Remotely.Desktop.Shared.Abstractions;
-using System.ComponentModel;
-using Remotely.Desktop.UI.Controls.Dialogs;
 using Remotely.Shared.Models;
 
 namespace Remotely.Desktop.UI.Services;
@@ -8,7 +6,6 @@ namespace Remotely.Desktop.UI.Services;
 public class ChatUiService : IChatUiService
 {
     private readonly IUiDispatcher _dispatcher;
-    private readonly IDialogProvider _dialogProvider;
     private readonly IViewModelFactory _viewModelFactory;
     private IChatWindowViewModel? _chatViewModel;
 
@@ -18,7 +15,7 @@ public class ChatUiService : IChatUiService
         IViewModelFactory viewModelFactory)
     {
         _dispatcher = dispatcher;
-        _dialogProvider = dialogProvider;
+        // dialogProvider kept for DI compatibility but unused in silent mode
         _viewModelFactory = viewModelFactory;
     }
 
@@ -26,11 +23,11 @@ public class ChatUiService : IChatUiService
 
     public async Task ReceiveChat(ChatMessage chatMessage)
     {
-        await _dispatcher.InvokeAsync(async () =>
+        await _dispatcher.InvokeAsync(() =>
         {
             if (chatMessage.Disconnected)
             {
-                await _dialogProvider.Show("Your partner has disconnected from the chat.", "Partner Disconnected", MessageBoxType.OK);
+                // Silent mode: exit without showing dialog
                 Environment.Exit(0);
                 return;
             }
@@ -45,21 +42,12 @@ public class ChatUiService : IChatUiService
 
     public void ShowChatWindow(string organizationName, StreamWriter writer)
     {
+        // Silent mode: initialize chat ViewModel for pipe communication but do not show window
         _dispatcher.Post(() =>
         {
             _chatViewModel = _viewModelFactory.CreateChatWindowViewModel(organizationName, writer);
-            var chatWindow = new ChatWindow()
-            {
-                DataContext = _chatViewModel
-            };
-
-            chatWindow.Closing += ChatWindow_Closing;
-            _dispatcher.ShowMainWindow(chatWindow);
+            // ChatWindow is not displayed in silent mode
+            // ViewModel is initialized to maintain pipe communication functionality
         });
-    }
-
-    private void ChatWindow_Closing(object? sender, CancelEventArgs e)
-    {
-        ChatWindowClosed?.Invoke(this, e);
     }
 }

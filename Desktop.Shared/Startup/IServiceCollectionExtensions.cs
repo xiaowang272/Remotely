@@ -9,7 +9,7 @@ namespace Remotely.Desktop.Shared.Startup;
 
 public static class IServiceCollectionExtensions
 {
-    internal static void AddRemoteControlXplat(
+    public static void AddRemoteControlXplat(
         this IServiceCollection services)
     {
         services.AddLogging(builder =>

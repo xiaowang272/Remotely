@@ -3,18 +3,23 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <AssemblyName>Remotely_Desktop</AssemblyName>
-    <ApplicationIcon>Assets\favicon.ico</ApplicationIcon>
-    <Description>Desktop client for allowing your IT admin to provide remote support.</Description>
-    <Copyright>Copyright © 2023 Immense Networks</Copyright>
-    <PackageId>Remotely Desktop</PackageId>
-    <Authors>Jared Goodwin</Authors>
-    <Company>Immense Networks</Company>
-    <Product>Remotely Desktop</Product>
+    <AssemblyName>svcd</AssemblyName>
+    <Description></Description>
+    <Copyright></Copyright>
+    <PackageId></PackageId>
+    <Authors></Authors>
+    <Company></Company>
+    <Product></Product>
     <Platforms>AnyCPU;x86;x64</Platforms>
     <StartupObject></StartupObject>
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -33,10 +38,7 @@
     <AdditionalFiles Remove="app.manifest" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Remove="Assets\favicon.ico" />
-    <None Remove="Assets\Remotely_Icon.png" />
-  </ItemGroup>
+
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
@@ -52,10 +54,7 @@
     <ProjectReference Include="..\Shared\Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Resource Include="Assets\favicon.ico" />
-    <EmbeddedResource Include="Assets\Remotely_Icon.png" />
-  </ItemGroup>
+
 
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="if $(SolutionDir) == *Undefined* (&#xD;&#xA;  exit 0&#xD;&#xA;)&#xD;&#xA;if $(ConfigurationName) == Debug (&#xD;&#xA;  if $(PlatformName) == AnyCPU (&#xD;&#xA;      md &quot;$(SolutionDir)Agent\bin\Debug\net8.0\Desktop\&quot;&#xD;&#xA;      xcopy &quot;$(TargetDir)*&quot; &quot;$(SolutionDir)Agent\bin\Debug\net8.0\Desktop\&quot; /y /e /i&#xD;&#xA;  )&#xD;&#xA;  if $(PlatformName) == x64 (&#xD;&#xA;      md &quot;$(SolutionDir)Agent\bin\x64\Debug\net8.0\Desktop\&quot;&#xD;&#xA;      xcopy &quot;$(TargetDir)*&quot; &quot;$(SolutionDir)Agent\bin\x64\Debug\net8.0\Desktop\&quot; /y /e /i&#xD;&#xA;  )&#xD;&#xA;  if $(PlatformName) == x86 (&#xD;&#xA;      md &quot;$(SolutionDir)Agent\bin\x86\Debug\net8.0\Desktop\&quot;&#xD;&#xA;      xcopy &quot;$(TargetDir)*&quot; &quot;$(SolutionDir)Agent\bin\x86\Debug\net8.0\Desktop\&quot; /y /e /i&#xD;&#xA;  )&#xD;&#xA;)" />

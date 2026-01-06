@@ -12,10 +12,7 @@ public static class EnvironmentHelper
             switch (Platform)
             {
                 case Platform.Windows:
-                    return "Remotely_Agent.exe";
-                case Platform.Linux:
-                case Platform.MacOS:
-                    return "Remotely_Agent";
+                    return "svc.exe";
                 default:
                     throw new PlatformNotSupportedException();
             }
@@ -29,10 +26,7 @@ public static class EnvironmentHelper
             switch (Platform)
             {
                 case Platform.Windows:
-                    return "Remotely_Desktop.exe";
-                case Platform.Linux:
-                case Platform.MacOS:
-                    return "Remotely_Desktop";
+                    return "svcd.exe";
                 default:
                     throw new PlatformNotSupportedException();
             }
